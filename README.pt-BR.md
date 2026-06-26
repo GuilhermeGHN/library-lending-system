@@ -55,7 +55,8 @@ A direção de dependência é `Domain <- Application <- Infrastructure <- API/W
 - MongoDB como modelo de leitura otimizado para consultas
 - Outbox transacional com `BackgroundService`
 - xUnit e Moq
-- OpenAPI e Docker Compose
+- Documentação OpenAPI com Swagger UI
+- Docker Compose
 
 ## Executar com Docker Compose
 

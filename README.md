@@ -55,7 +55,8 @@ Dependency direction is `Domain <- Application <- Infrastructure <- API/Worker`.
 - MongoDB as the query-optimized read model
 - Transactional Outbox with `BackgroundService`
 - xUnit and Moq
-- OpenAPI and Docker Compose
+- OpenAPI documentation with Swagger UI
+- Docker Compose
 
 ## Run with Docker Compose
 
