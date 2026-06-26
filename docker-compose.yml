@@ -1,0 +1,75 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-library}
+      MYSQL_USER: ${MYSQL_USER:-library}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-library}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-root-password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  mongodb:
+    image: mongo:8.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Library.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__MySql: server=mysql;port=3306;database=${MYSQL_DATABASE:-library};user=${MYSQL_USER:-library};password=${MYSQL_PASSWORD:-library}
+      ConnectionStrings__MongoDb: mongodb://mongodb:27017
+      MongoDb__Database: ${MONGODB_DATABASE:-library_read}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: Library.Worker/Dockerfile
+    environment:
+      ConnectionStrings__MySql: server=mysql;port=3306;database=${MYSQL_DATABASE:-library};user=${MYSQL_USER:-library};password=${MYSQL_PASSWORD:-library}
+      ConnectionStrings__MongoDb: mongodb://mongodb:27017
+      MongoDb__Database: ${MONGODB_DATABASE:-library_read}
+      Outbox__PollingIntervalSeconds: ${OUTBOX_POLLING_INTERVAL_SECONDS:-2}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE:-50}
+      Outbox__MaxAttempts: ${OUTBOX_MAX_ATTEMPTS:-10}
+      Outbox__RetryDelaySeconds: ${OUTBOX_RETRY_DELAY_SECONDS:-5}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+  mongo-data:

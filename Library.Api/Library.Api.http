@@ -1,0 +1,62 @@
+@Library.Api_HostAddress = http://localhost:8080
+@BookId = 00000000-0000-0000-0000-000000000000
+@LoanId = 00000000-0000-0000-0000-000000000000
+
+# Health
+GET {{Library.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+# OpenAPI
+GET {{Library.Api_HostAddress}}/swagger/v1/swagger.json
+Accept: application/json
+
+###
+
+# Create book
+POST {{Library.Api_HostAddress}}/api/books
+Content-Type: application/json
+
+{
+  "title": "Domain-Driven Design",
+  "author": "Eric Evans",
+  "publicationYear": 2003,
+  "availableQuantity": 2
+}
+
+###
+
+# List books
+GET {{Library.Api_HostAddress}}/api/books
+Accept: application/json
+
+###
+
+# Get book
+GET {{Library.Api_HostAddress}}/api/books/{{BookId}}
+Accept: application/json
+
+###
+
+# Create loan
+POST {{Library.Api_HostAddress}}/api/books/{{BookId}}/loans
+Accept: application/json
+
+###
+
+# List loans
+GET {{Library.Api_HostAddress}}/api/loans
+Accept: application/json
+
+###
+
+# Get loan
+GET {{Library.Api_HostAddress}}/api/loans/{{LoanId}}
+Accept: application/json
+
+###
+
+# Return loan
+POST {{Library.Api_HostAddress}}/api/loans/{{LoanId}}/return
+Accept: application/json
