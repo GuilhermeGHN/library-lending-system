@@ -2,15 +2,19 @@
 
 # Library Lending System
 
-Case de backend para livros e empréstimos de bibliotecas comunitárias, com foco em modelo de domínio rico, CQRS pragmático, consistência eventual, concorrência otimista e sincronização confiável. É intencionalmente um monólito modular pequeno, com uma API e um worker.
+![.NET](https://img.shields.io/badge/.NET-10-512BD4)
+![C%23](https://img.shields.io/badge/C%23-14-239120)
+![License](https://img.shields.io/github/license/GuilhermeGHN/library-lending-system)
 
-## Problema e tópicos de engenharia
+Backend de empréstimos para bibliotecas comunitárias construído com .NET 10, CQRS, MySQL, MongoDB, concorrência otimista e outbox transacional.
+
+> Um pequeno case de arquitetura focado em confiabilidade, trade-offs explícitos e modelagem de domínio pragmática.
+
+## Problema
 
 O sistema cadastra e lista livros, empresta exemplares disponíveis e devolve empréstimos. O MySQL é o modelo de escrita autoritativo. O MongoDB é um modelo de leitura otimizado e eventualmente consistente. Um outbox transacional evita transformar a escrita de negócio e a intenção de sincronização em um dual write frágil.
 
 O case demonstra invariantes protegidas no domínio, handlers explícitos, tokens de concorrência do EF Core, erros RFC 7807, processamento at-least-once, projeções versionadas idempotentes, retry limitado e logs estruturados.
-
-Os nomes físicos de armazenamento usam singular em `snake_case`: as tabelas MySQL são `book`, `loan` e `outbox_message`; as coleções MongoDB são `book` e `loan`.
 
 ## Arquitetura
 
@@ -27,9 +31,31 @@ flowchart LR
 
 A direção de dependência é `Domain <- Application <- Infrastructure <- API/Worker`. A aplicação expõe portas focadas e nunca `DbContext`, `DbSet` ou `IQueryable`.
 
-## Tecnologia
+## Cobertura de requisitos
 
-.NET 10, C# 14, controllers ASP.NET Core, EF Core 10 com provider oficial MySQL, MongoDB Driver, xUnit, OpenAPI, BackgroundService e Docker Compose.
+| Requisito | Implementação |
+|---|---|
+| Domínio rico | `Book` e `Loan` protegem invariantes |
+| Escrita relacional | MySQL + EF Core + migration |
+| Leitura NoSQL | Projeções MongoDB `book` e `loan` |
+| CQRS | Comandos MySQL e consultas MongoDB |
+| Sincronização | Outbox transacional + um worker |
+| Concorrência | Tokens otimistas explícitos `Book.Version` e `Loan.Version` |
+| Falhas confiáveis | Retry limitado, tentativa/erro persistidos e logs |
+| Idempotência | Apenas versões de projeção mais novas são aplicadas |
+| Erros da API | RFC 7807 com 400/404/409 |
+| Testes unitários | Projetos xUnit de domínio, aplicação e infraestrutura opcional |
+
+## Stack de tecnologia
+
+- .NET 10 e controllers ASP.NET Core
+- C# 14
+- Entity Framework Core 10 com provider oficial MySQL
+- MySQL como modelo de escrita autoritativo
+- MongoDB como modelo de leitura otimizado para consultas
+- Outbox transacional com `BackgroundService`
+- xUnit e Moq
+- OpenAPI e Docker Compose
 
 ## Executar com Docker Compose
 
@@ -55,7 +81,19 @@ dotnet run --project Library.Api
 dotnet run --project Library.Worker
 ```
 
-A configuração tem um único formato entre arquivos locais e variáveis de ambiente. O Docker Compose lê `.env` apenas para interpolar valores dos containers e repassa chaves padrão do .NET para API e worker: `ConnectionStrings__MySql`, `ConnectionStrings__MongoDb`, `MongoDb__Database`, `Outbox__PollingIntervalSeconds`, `Outbox__BatchSize`, `Outbox__MaxAttempts` e `Outbox__RetryDelaySeconds`. Nunca versione `.env` ou credenciais reais.
+A configuração tem um único formato entre arquivos locais e variáveis de ambiente. O Docker Compose lê `.env` apenas para interpolar valores dos containers e repassa chaves padrão do .NET para API e worker:
+
+| Variável | Finalidade | Padrão no Compose |
+|---|---|---|
+| `ConnectionStrings__MySql` | Conexão MySQL autoritativa | Conexão do serviço Compose |
+| `ConnectionStrings__MongoDb` | Conexão MongoDB | `mongodb://mongodb:27017` |
+| `MongoDb__Database` | Banco do modelo de leitura | `library_read` |
+| `Outbox__PollingIntervalSeconds` | Atraso entre consultas sem mensagens, em segundos | `2` |
+| `Outbox__BatchSize` | Máximo de mensagens por lote | `50` |
+| `Outbox__MaxAttempts` | Tentativas limitadas por falha | `10` |
+| `Outbox__RetryDelaySeconds` | Atraso entre tentativas com falha, em segundos | `5` |
+
+Nunca versione `.env` ou credenciais reais.
 
 ## API
 
@@ -128,29 +166,24 @@ dotnet test Library.Infrastructure.Tests
 
 Use bancos descartáveis nessas variáveis. O teste MySQL recria as tabelas mapeadas via migrations do EF Core; o teste MongoDB remove o banco de projeção configurado.
 
-## Cobertura de requisitos
+## Decisões principais
 
-| Requisito | Implementação |
-|---|---|
-| Domínio rico | `Book` e `Loan` protegem invariantes |
-| Escrita relacional | MySQL + EF Core + migration |
-| Leitura NoSQL | Projeções MongoDB `book` e `loan` |
-| CQRS | Comandos MySQL e consultas MongoDB |
-| Sincronização | Outbox transacional + um worker |
-| Concorrência | Tokens otimistas explícitos `Book.Version` e `Loan.Version` |
-| Falhas confiáveis | Retry limitado, tentativa/erro persistidos e logs |
-| Idempotência | Apenas versões de projeção mais novas são aplicadas |
-| Erros da API | RFC 7807 com 400/404/409 |
-| Testes unitários | Projetos xUnit de domínio, aplicação e infraestrutura opcional |
+- MySQL é a fonte da verdade; MongoDB é uma projeção eventualmente consistente.
+- Comandos nunca usam MongoDB para validar invariantes críticas de negócio.
+- EF Core foi escolhido para cumprir o requisito do case, atrás de repositórios focados.
+- O outbox é processado diretamente, sem broker na arquitetura inicial.
+- Um worker contém múltiplos handlers de eventos e permanece uma única unidade de deploy.
 
-## Limitações e evoluções
+Trade-offs detalhados estão documentados em [DECISIONS.pt-BR.md](DECISIONS.pt-BR.md) e nos três [ADRs](docs/adr/pt-BR).
+
+## Limitações deliberadas e evolução
 
 - Sem autenticação/autorização, fora do escopo.
 - Sem read-your-writes estrito ou endpoint de lag.
 - Outbox é retido; produção deve adicionar retenção/arquivamento.
-- Testes com bancos reais e concorrência são evolução futura documentada, não parte da entrega básica.
+- Testes de infraestrutura exigem instâncias externas de MySQL e MongoDB e não rodam no fluxo padrão de testes unitários.
 - O deploy inicial pressupõe uma instância do worker. As projeções são idempotentes, mas a tabela de outbox não implementa claim, lock ou lease distribuído; múltiplos workers exigiriam um desses mecanismos antes de escalar horizontalmente.
 - Métricas úteis: pendências, idade da mais antiga, falhas, lag e duração.
 - Com consumidores independentes ou maior volume, evoluir para broker e Inbox Pattern. Não introduzir antes de evidência concreta.
 
-Veja [DECISIONS.pt-BR.md](DECISIONS.pt-BR.md) e os três [ADRs](docs/adr/pt-BR) para trade-offs e complexidade rejeitada.
+Veja [DECISIONS.pt-BR.md](DECISIONS.pt-BR.md) para nomes físicos de armazenamento, escolhas de persistência e complexidade rejeitada.

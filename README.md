@@ -2,15 +2,19 @@
 
 # Library Lending System
 
-A backend case study for community-library books and loans, focused on rich domain modeling, pragmatic CQRS, eventual consistency, optimistic concurrency, and reliable data synchronization. It is intentionally a small modular monolith with one API and one worker.
+![.NET](https://img.shields.io/badge/.NET-10-512BD4)
+![C%23](https://img.shields.io/badge/C%23-14-239120)
+![License](https://img.shields.io/github/license/GuilhermeGHN/library-lending-system)
 
-## Problem and engineering topics
+Community library lending backend built with .NET 10, CQRS, MySQL, MongoDB, optimistic concurrency, and a transactional outbox.
+
+> A small architecture case study focused on reliability, explicit trade-offs, and pragmatic domain modeling.
+
+## Problem
 
 The system creates and lists books, lends available copies, and returns loans. MySQL is the authoritative write model. MongoDB is a query-optimized, eventually consistent read model. A transactional outbox prevents the business write and synchronization intent from becoming a fragile dual write.
 
 The case demonstrates protected domain invariants, explicit use-case handlers, EF Core concurrency tokens, RFC 7807 errors, at-least-once processing, idempotent versioned projections, bounded retry, and structured logs.
-
-Physical storage names use singular `snake_case`: MySQL tables are `book`, `loan`, and `outbox_message`; MongoDB collections are `book` and `loan`.
 
 ## Architecture
 
@@ -27,9 +31,31 @@ flowchart LR
 
 Dependency direction is `Domain <- Application <- Infrastructure <- API/Worker`. The application exposes focused persistence ports; it never exposes `DbContext`, `DbSet`, or `IQueryable`.
 
-## Technology
+## Requirements coverage
 
-.NET 10, C# 14, ASP.NET Core controllers, EF Core 10 with the official MySQL provider, MongoDB Driver, xUnit, OpenAPI, BackgroundService, and Docker Compose.
+| Requirement | Implementation |
+|---|---|
+| Rich domain model | `Book` and `Loan` protect their own invariants |
+| Relational write model | MySQL + EF Core mappings and migration |
+| NoSQL read model | MongoDB `book` and `loan` projections |
+| CQRS | MySQL commands and MongoDB query handlers |
+| Synchronization | Transactional outbox + one worker |
+| Concurrency | Explicit optimistic `Book.Version` and `Loan.Version` tokens |
+| Reliable failures | Bounded retry, attempt/error persistence, structured logs |
+| Idempotency | Apply only newer projection versions |
+| API errors | RFC 7807 with 400/404/409 mappings |
+| Unit tests | Domain, application, and optional infrastructure xUnit projects |
+
+## Technology stack
+
+- .NET 10 and ASP.NET Core controllers
+- C# 14
+- Entity Framework Core 10 with the official MySQL provider
+- MySQL as the authoritative write model
+- MongoDB as the query-optimized read model
+- Transactional Outbox with `BackgroundService`
+- xUnit and Moq
+- OpenAPI and Docker Compose
 
 ## Run with Docker Compose
 
@@ -140,29 +166,24 @@ dotnet test Library.Infrastructure.Tests
 
 Use disposable databases in these variables. The MySQL test recreates the mapped tables through EF Core migrations; the MongoDB test drops the configured projection database.
 
-## Requirements coverage
+## Key decisions
 
-| Requirement | Implementation |
-|---|---|
-| Rich domain model | `Book` and `Loan` protect their own invariants |
-| Relational write model | MySQL + EF Core mappings and migration |
-| NoSQL read model | MongoDB `book` and `loan` projections |
-| CQRS | MySQL commands and MongoDB query handlers |
-| Synchronization | Transactional outbox + one worker |
-| Concurrency | Explicit optimistic `Book.Version` and `Loan.Version` tokens |
-| Reliable failures | Bounded retry, attempt/error persistence, structured logs |
-| Idempotency | Apply only newer projection versions |
-| API errors | RFC 7807 with 400/404/409 mappings |
-| Unit tests | Domain, application, and optional infrastructure xUnit projects |
+- MySQL is the source of truth; MongoDB is an eventually consistent projection.
+- Commands never use MongoDB to validate critical business invariants.
+- EF Core was selected for assessment compliance, behind focused repositories.
+- The outbox is processed directly without a broker in the initial architecture.
+- One worker contains multiple event handlers and remains a single deployable unit.
 
-## Known limitations and evolution
+Detailed trade-offs are documented in [DECISIONS.md](DECISIONS.md) and the three [ADRs](docs/adr).
+
+## Deliberate limitations and evolution
 
 - No authentication or authorization; intentionally outside scope.
 - No strict read-your-writes or projection-lag endpoint.
 - Outbox rows are retained; production operation should add a retention/archival job.
-- Real-database and concurrency tests are a documented future evolution, not part of the basic delivery.
+- Infrastructure tests require external MySQL and MongoDB instances and are not executed as part of the default unit-test workflow.
 - A single worker instance is the expected initial deployment. The projections are idempotent, but the outbox table does not implement distributed claiming, locking, or leasing; multiple workers would need one of those before horizontal scaling.
 - Useful metrics include pending count, oldest pending age, failure count, projection lag, and processing duration.
 - With independent consumers or greater throughput, evolve the outbox publisher toward a broker and add an inbox pattern. Introduce neither before evidence justifies the operational cost.
 
-See [DECISIONS.md](DECISIONS.md) and the three [ADRs](docs/adr) for the deliberately rejected complexity and trade-offs.
+See [DECISIONS.md](DECISIONS.md) for storage naming, persistence choices, and deliberately rejected complexity.
